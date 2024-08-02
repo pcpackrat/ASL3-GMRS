@@ -1,0 +1,105 @@
+#!/bin/bash
+#
+# AllStarLink extnodes generator
+#
+# Copyright (C) 2018-2024, AllStarLink, Inc.
+#
+# Written by:
+# Tim Sawyer, WD6AWP
+# Rob Vella, KK9ROB (send patch diff instead of full file)
+# Steve N4IRS
+# Jason McCormick, N8EI (modernization for systemd, packaging)
+#
+# See http://allstarlink.org for more information about
+# this project. Please do not directly contact
+# any of the maintainers of this project for assistance;
+# the project provides a web site, and mailing lists
+# for your use.
+#
+# This program is free software, distributed under the terms of
+# the GNU General Public License Version 3. See the LICENSE file
+# at the top of the source tree.
+
+NODE_DB_HOST=register.gmrslive.com
+URI="cgi-bin/nodes.pl"
+NODE_URL="http://register.gmrslive.com/cgi-bin/nodes.pl"
+USERAGENT="asl3-update-nodelist/1.0"
+
+FILEPATH=/var/lib/asterisk
+NODELIST=rpt_extnodes
+EXTNODES=$FILEPATH/$NODELIST
+EXTNODESTMP=$(mktemp)
+HASH_FILE=$FILEPATH/asl3un-hash
+
+getLastHash() {
+        last_hash=$(head -n1 ${HASH_FILE})
+}
+
+writeHash() {
+        curr_hash=$(grep SHA1 $EXTNODES | cut -d "=" -f 2 | tail -n 1)
+        echo "${curr_hash}" > $HASH_FILE
+}
+
+downloadNodelist() {
+        echo "downloading \"${NODE_URL}\""
+        wget --user-agent="$USERAGENT" -q -O $EXTNODES "${NODE_URL}"
+        if [ $? -ne 0 ]; then
+                echo "failed to download from ${NODE_URL}"
+                rm -f $EXTNODESTMP
+                exit 1
+        fi
+}
+
+writeNodelist() {
+        # Q? does app_rpt need the file not to change?
+        cat ${1} > ${EXTNODES}
+        writeHash
+        echo "${NODELIST} updated"
+}
+
+# See if this is a full or differential
+[ ! -f $HASH_FILE ] && touch $HASH_FILE
+QS=""
+getLastHash
+[ "${last_hash}" != '' ] && QS="?hash=${last_hash}"
+
+# Download the Nodelist
+downloadNodelist "${QS}"
+
+diff_type=$(head -n1 ${EXTNODESTMP} | sed -e 's/^;//g')
+case $diff_type in
+        Full)
+                # Does app_rpt need the file not to change?
+                writeNodelist ${EXTNODESTMP}
+                ;;
+
+        Empty)
+                echo "${NODELIST} unchanged"
+                ;;
+
+        Diff)
+                echo "applying patch"
+                NEW_FILE=$(mktemp)
+                cp ${EXTNODES} ${NEW_FILE}
+                patch --no-backup-if-mismatch -t -s -r 1 ${NEW_FILE} ${EXTNODESTMP}
+                if [ $? -eq 0 ]; then
+                        # if all hunks applied successfully
+                        writeNodelist ${NEW_FILE}
+                else
+                        # if some hunks cannot be applied or there were merge conflicts
+                        # or there is more serious trouble, download the "Full" Nodelist
+                        downloadNodelist ""
+                        writeNodelist ${EXTNODESTMP}
+                fi
+                rm $NEW_FILE
+                ;;
+esac
+
+rm $EXTNODESTMP
+
+if [ ${USER} != "asterisk" ]; then
+        chown asterisk:asterisk ${EXTNODES} ${HASH_FILE}
+        chmod 644 ${EXTNODES} ${HASH_FILE}
+fi
+
+exit 0
