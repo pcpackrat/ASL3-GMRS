@@ -1,4 +1,6 @@
-Break http registration and add to iax.conf:
+Setup node using the usual methods for asl3
+
+Break comment out register line in rpt_http_registrations.conf and add to iax.conf:
 
 register => node:passsword@register.gmrslive.com
 
@@ -7,4 +9,6 @@ add:
 cop,62,GPIO4:1 = c|t|RPT_RXKEYED
 cop,62,GPIO4:0 = c|f|RPT_RXKEYED
 
-------------------------------------------
+# Edit rpt.conf and set to File only for lookups:
+[general]
+node_lookup_method = file
