@@ -1,6 +1,6 @@
 Setup node using the usual methods for asl3
 
-Break comment out register line in rpt_http_registrations.conf and add to iax.conf:
+Break http registration,comment out register line in rpt_http_registrations.conf and add to iax.conf:
 
 register => node:passsword@register.gmrslive.com
 
@@ -12,3 +12,7 @@ cop,62,GPIO4:0 = c|f|RPT_RXKEYED
 # Edit rpt.conf and set to File only for lookups:
 [general]
 node_lookup_method = file
+
+Modify /usr/bin/asl3-update-nodelist to grab the right files from gmrslive
+Modify /usr/bin/asl3-update-astdb to grab the right files from gmrslive
+
